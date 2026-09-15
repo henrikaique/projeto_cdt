@@ -335,7 +335,7 @@ if __name__ == "__main__":
     inicializar_sistema_sky()
 
     print("\n========================================================")
-    print("  IA SKY - MODELO AVANÇADO LLAMA 3.1 (8B)                ")
+    print("  IA SKY - MODELO AVANÇADO (v1.0.0)                ")
     print("========================================================\n")
 
     usuario_id_ativo = None
