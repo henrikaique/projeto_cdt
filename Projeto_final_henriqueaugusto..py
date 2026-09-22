@@ -18,7 +18,7 @@ import urllib.parse
 import webbrowser
 from datetime import datetime
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 
 print("[INFO] Iniciando verificação de dependências...")
 
@@ -52,6 +52,12 @@ NOME_BANCO_DADOS = "historico_sky.db"
 ARQUIVO_CONFIG_JSON = "config.json"
 LIMITE_MENSAGENS_RECENTES = 4
 SCOPES = ['https://www.googleapis.com/auth/calendar']
+
+# Perfil administrativo local: qualquer conta com este nome ganha acesso ao botão
+# de exportação do banco de dados na interface. A senha em si (definida no login
+# normal, como qualquer outra conta) deve ser 'Root'. Isso não é uma trava de
+# segurança real - é só um atalho de conveniência para um app local de um usuário só.
+NOME_USUARIO_ROOT = "Root Master"
 
 # Limite de segurança do loop de ferramentas do modo Assistente
 MAX_TOOL_ITERATIONS = 5
@@ -687,6 +693,43 @@ def obter_conversas_da_sessao(usuario_id: int, sessao_id: str) -> list:
     return registros
 
 
+def exportar_banco_dados_json(caminho_arquivo: str = None) -> str:
+    """Exporta todas as tabelas do banco de dados (usuarios, conversas e
+    memoria_resumida) para um único arquivo JSON, para backup ou inspeção manual.
+
+    Args:
+        caminho_arquivo: caminho de destino do .json. Se não for informado, um
+            nome com timestamp é gerado automaticamente na pasta atual do script.
+    """
+    if not caminho_arquivo or not caminho_arquivo.strip():
+        caminho_arquivo = f"backup_sky_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+    try:
+        conexao = obter_conexao_db()
+        conexao.row_factory = sqlite3.Row
+        cursor = conexao.cursor()
+
+        tabelas_exportadas = {}
+        for nome_tabela in ["usuarios", "conversas", "memoria_resumida"]:
+            cursor.execute(f"SELECT * FROM {nome_tabela};")
+            tabelas_exportadas[nome_tabela] = [dict(linha) for linha in cursor.fetchall()]
+
+        conexao.close()
+
+        pacote_exportado = {
+            "gerado_em": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "banco_origem": NOME_BANCO_DADOS,
+            "tabelas": tabelas_exportadas,
+        }
+
+        with open(caminho_arquivo, "w", encoding="utf-8") as f:
+            json.dump(pacote_exportado, f, indent=4, ensure_ascii=False, default=str)
+
+        return f"Banco de dados exportado com sucesso para '{os.path.abspath(caminho_arquivo)}'."
+    except Exception as e:
+        return f"Erro ao exportar banco de dados: {str(e)}"
+
+
 # =============================================================================
 # MÓDULO DA IA "SKY" COM FUNCTION CALLING (FERRAMENTAS) - DOIS MODOS
 # =============================================================================
@@ -1110,6 +1153,27 @@ class AppSky:
         else:
             messagebox.showerror("Acesso Negado", msg)
 
+    def eh_usuario_root(self) -> bool:
+        """True se o usuário logado for o perfil administrativo (Root Master)."""
+        return self.nome_usuario.strip().lower() == NOME_USUARIO_ROOT.lower()
+
+    def exportar_banco_dados_gui(self):
+        """Pede um destino ao usuário e exporta o banco de dados inteiro em JSON."""
+        caminho = filedialog.asksaveasfilename(
+            title="Exportar banco de dados como JSON",
+            defaultextension=".json",
+            filetypes=[("Arquivo JSON", "*.json"), ("Todos os arquivos", "*.*")],
+            initialfile=f"backup_sky_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+        )
+        if not caminho:
+            return
+
+        resultado = exportar_banco_dados_json(caminho)
+        if resultado.startswith("Erro"):
+            messagebox.showerror("Exportação falhou", resultado)
+        else:
+            messagebox.showinfo("Exportação concluída", resultado)
+
     # -------------------------------------------------------------------
     # TELA PRINCIPAL DE CHAT
     # -------------------------------------------------------------------
@@ -1160,6 +1224,14 @@ class AppSky:
             relief="flat", command=self.criar_nova_aba_chat, cursor="hand2"
         )
         btn_novo.pack(side="right", padx=2)
+
+        if self.eh_usuario_root():
+            btn_exportar = tk.Button(
+                linha_superior, text="📦 Exportar JSON", bg=self.COR_BOTAO_HIST,
+                fg=self.COR_TEXTO_BOTAO, font=("Helvetica", 9, "bold"),
+                relief="flat", command=self.exportar_banco_dados_gui, cursor="hand2"
+            )
+            btn_exportar.pack(side="right", padx=2)
 
         # ------------------- Seletor de modo (💬 Chat Bot / 🤖 Assistente) -------------------
         linha_modo = tk.Frame(frame_topo, bg=self.COR_FUNDO_TOPO)
