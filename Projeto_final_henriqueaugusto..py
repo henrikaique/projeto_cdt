@@ -1,6 +1,6 @@
 ﻿"""
 ===============================================================================
-IA "SKY" - Versão Automação Total (Controle Local + Google Calendar + Sistema)
+IA "SKY" - Versão Automação Total (Controle Local + Navegação Web + Google Calendar)
 ===============================================================================
 """
 
@@ -12,6 +12,7 @@ import sys
 import subprocess
 import threading
 import traceback
+import urllib.parse
 import webbrowser
 from datetime import datetime
 import tkinter as tk
@@ -52,24 +53,45 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
 # =============================================================================
-# MÓDULO DE AUTOMAÇÃO LOCAL (APLICATIVOS E TERMINAL)
+# MÓDULO DE AUTOMAÇÃO LOCAL E NAVEGAÇÃO WEB
 # =============================================================================
 
 def abrir_aplicativo(nome_app: str) -> str:
-    """Abre um aplicativo local ou site no navegador do sistema operacional."""
+    """Abre aplicativos locais, canais do YouTube, sites ou buscas na Web."""
     nome_clean = nome_app.lower().strip()
     sistema = sys.platform
 
-    # Trata comandos do Google / Navegador sem invocar comandos inválidos do Windows
+    # 1. Tratamento avançado para pedidos de YouTube / Canais
+    if "youtube" in nome_clean:
+        if "edukof" in nome_clean or "amenic" in nome_clean:
+            webbrowser.open("https://www.youtube.com/@edukof")
+            return "Canal do EduKof aberto com sucesso no YouTube!"
+        elif "canal" in nome_clean or "pesquisa" in nome_clean or "buscar" in nome_clean:
+            termo = nome_clean.replace("youtube", "").replace("abrir", "").replace("canal", "").replace("do", "").replace("pelo", "").strip()
+            termo_encoded = urllib.parse.quote(termo)
+            webbrowser.open(f"https://www.youtube.com/results?search_query={termo_encoded}")
+            return f"Pesquisando '{termo}' no YouTube!"
+        else:
+            webbrowser.open("https://www.youtube.com")
+            return "YouTube aberto com sucesso no navegador!"
+
+    # 2. Tratamento para Google e buscas na Web
     if any(k in nome_clean for k in ["google", "chrome", "navegador", "internet"]):
         if "calendario" in nome_clean or "calendar" in nome_clean or "agenda" in nome_clean:
             webbrowser.open("https://calendar.google.com")
             return "Google Calendário aberto no seu navegador."
+        
+        # Extrai possíveis termos de pesquisa
+        termo_busca = nome_clean.replace("google", "").replace("chrome", "").replace("abra", "").replace("pesquisar", "").replace("para mim", "").strip()
+        if termo_busca:
+            termo_encoded = urllib.parse.quote(termo_busca)
+            webbrowser.open(f"https://www.google.com/search?q={termo_encoded}")
+            return f"Pesquisando '{termo_busca}' no Google!"
         else:
             webbrowser.open("https://www.google.com")
             return "Navegador Google Chrome aberto com sucesso."
 
-    # Mapeamento de caminhos do Chrome caso seja chamado especificamente
+    # 3. Mapeamento de programas locais comuns no Windows
     user_profile = os.environ.get("USERPROFILE", "")
     caminhos_chrome = [
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -106,12 +128,14 @@ def abrir_aplicativo(nome_app: str) -> str:
                 subprocess.Popen(chrome_encontrado)
                 return f"Google Chrome aberto com sucesso."
             else:
-                # Se for uma URL ou domínio, abre diretamente no navegador
+                # Se for uma URL ou site
                 if "." in nome_clean or "http" in nome_clean:
                     webbrowser.open(nome_clean)
                     return f"Abrindo site '{nome_app}' no navegador."
                 else:
-                    return f"Não foi possível localizar o aplicativo '{nome_app}'. Verifique se está instalado."
+                    # Fallback para busca no navegador
+                    webbrowser.open(f"https://www.google.com/search?q={urllib.parse.quote(nome_app)}")
+                    return f"Pesquisando por '{nome_app}' no navegador."
         elif sistema == "darwin":  # macOS
             subprocess.Popen(["open", "-a", nome_app])
             return f"Aplicativo '{nome_app}' aberto no macOS."
@@ -119,7 +143,7 @@ def abrir_aplicativo(nome_app: str) -> str:
             subprocess.Popen([nome_clean])
             return f"Aplicativo '{nome_app}' iniciado no Linux."
     except Exception as e:
-        return f"Falha ao abrir o aplicativo '{nome_app}': {str(e)}"
+        return f"Falha ao processar solicitação para '{nome_app}': {str(e)}"
 
 
 def executar_comando_terminal(comando: str) -> str:
@@ -443,13 +467,13 @@ class AgenteSky:
         instrucao_sistema = {
             "role": "system",
             "content": (
-                f"Você é a SKY, uma assistente virtual com acesso ao sistema e ao Google Calendar.\n"
+                f"Você é a SKY, uma assistente virtual com acesso ao sistema, à navegação Web e ao Google Calendar.\n"
                 f"Usuário: {nome_usuario} | Data/Hora Atual: {momento_atual}\n\n"
                 f"FATOS CONHECIDOS SOBRE O USUÁRIO:\n{resumo_fatos}\n\n"
                 f"REGRAS DE CONDUTA:\n"
-                f"1. Use a ferramenta 'abrir_aplicativo' se o usuário pedir para abrir navegadores, sites ou programas locais.\n"
+                f"1. Use a ferramenta 'abrir_aplicativo' se o usuário pedir para abrir navegadores, sites (YouTube, Google, etc.) ou programas locais.\n"
                 f"2. Use a ferramenta 'agendar_compromisso_google' para criar reuniões no Google Calendar. Converta datas relativas (ex: 'hoje às 15h') em formato ISO 'YYYY-MM-DDTHH:MM:SS' usando a Data/Hora Atual como referência.\n"
-                f"3. Não invente comandos do sistema operacional que não existam."
+                f"3. Responda sempre de forma prestativa e amigável."
             ),
         }
 
@@ -776,7 +800,7 @@ class AppSky:
         else:
             self.adicionar_texto_chat(
                 area_chat,
-                f"✨ SKY: Olá, {self.nome_usuario}! Posso abrir programas no seu PC ou agendar reuniões no seu Google Calendar. Como posso ajudar?\n\n",
+                f"✨ SKY: Olá, {self.nome_usuario}! Posso abrir programas no seu PC, navegar na Web ou agendar reuniões no seu Google Calendar. Como posso ajudar?\n\n",
                 "sky",
             )
 
